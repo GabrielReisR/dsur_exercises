@@ -1,4 +1,5 @@
-# Discovering Statistics Using R *(BETA)*
+# Discovering Statistics Using R
+
 This contains codes and data I've used while learning multivariate data analysis
 with 
 <a href="https://scholar.google.co.uk/citations?user=0Iy7PFYAAAAJ&hl=en" target="_blank">Andy Field</a>'s
