@@ -9,214 +9,160 @@ library(magrittr)
 library(psych)
 library(tidyr)
 
-# Comparing two independent groups with Wilcoxon rank-sum test ====
-df <- read.delim(".\\Data Files\\Drug.dat")
-df$drug %<>% as.factor
+df <- read.delim(".\\Data Files\\raq.dat")
 
-# Checking for normality and homoscedasticity ====
-by(df %>% select(ends_with('BDI')), df$drug,
-   stat.desc, norm = T, basic = F)
+# Creating correlation matrix of items ====
+cor_matrix <- cor(df)
 
-#' In the alcohol condition, wedsBDI violates normality
-#' In the esctasy condition, sundayBDI violates normality
+# Checking Bartlett's assumption ====
+#' Bartlett's assumption is that my correlation matrix is an identity matrix.
+#' The H1 for this is that my matrix is NOT an identity matrix.
+#' So if we get a significant result, I can proceed with the analysis.
+cortest.bartlett(df) # significant, yay!
 
-leveneTest(df$sundayBDI, df$drug, data = df)
-leveneTest(df$wedsBDI, df$drug, data = df)
+#' But it's best if we give the matrix of correlations...
 
-#' Neither of the groups violate homoscedasticity
+cortest.bartlett(cor_matrix, n = 2571) # significant, yay!
 
-# Conducting Wilcoxon rank-sum test ====
-#' In order to use a normal approximation, we set `exact = F` and `correct = F`
-sunday_model <- wilcox.test(sundayBDI ~ drug, data = df,
-                            exact = F, correct = F)
+# Checking Kaiser-Meyer-Olkin results ====
+#' This is the sum of correlations of an item with all other items divided by
+#' the sum of correlations of an item with all other items PLUS its partial
+#' correlations with all other items.
+#' 
+#' If the partial correlations with all other items == 0, that means we get a
+#' KMO result of 1. That means that we have correlations between items only when
+#' considering those items to be separate. When we take into account all other
+#' items, we get low partial correlations because there's "something else"
+#' explaining the correlations between items (that is, the latent variable).
+#' 
+#' From that, we can conclude that:
+#' 0.5 is the minimum acceptable value for KMO
+#' 0.7 is a good enough value, since at least 49% of the variation in the
+#' correlations can be explained by only the correlations (0.7 ^2 = 49%).
+#' 0.8 is also a good number.
+#' 0.9 is a great number!
 
-wedsneday_model <- wilcox.test(wedsBDI ~ drug, data = df,
-                            exact = F, correct = F)
+KMO(cor_matrix)
 
-#' Type of drug affected depression symptoms only on wednesday model, 
-#' with W = 4 and p < .001.
+# Overall MSA =  0.93
+#' *great* number!
 
-# Calculating effect size ====
-#' Small function to calculate the effect size based on [R = z / sqrt(N)]
-rFromWilcox <- function(wilcoxModel, N) {
-  z <- qnorm(wilcoxModel$p.value / 2)
-  r <- z / sqrt(N)
-  cat(wilcoxModel$data.name, "Effect Size, r = ", r)
+# Accessing the determinant ====
+#' This is not particularly done nor reported.
+det(cor_matrix)
+
+#' The recommendation is that it should be above 0.00001
+#' It is, in this case, 0.0005... so yay us!
+
+# Running a Principal Components Analysis using psych::principal() ====
+pc1 <- principal(cor_matrix,
+                 nfactors = length(cor_matrix[1,]), # 23
+                 rotate = 'none') # not for now, at least
+
+pc1
+
+# Getting scree plot for the first solution ====
+plot(pc1$values)
+
+# Running second Principal Components Analysis using psych::principal() ====
+pc2 <- principal(cor_matrix,
+                 nfactors = 4,
+                 rotate = 'none') # not for now, at least
+
+pc2
+
+# Getting the factor model - the reproduced correlations between items ====
+factor.model(pc2$loadings)
+
+#' The diagonal of this matrix contains the communalities after extraction 
+#' for each variable
+
+# Getting the factor residuals ====
+factor.residuals(cor_matrix, pc2$loadings)
+
+#' The diagonal of this matrix is the uniquenesses. This matrix contains the 
+#' differences between the observed correlation coefficients and the ones 
+#' predicted from the model.
+
+# Creating a function to calculate residuals for the model ====
+residual.stats <- function(matrix){
+  residuals <- as.matrix(matrix[upper.tri(matrix)])
+  large.resid <- abs(residuals) > 0.05
+  numberLargeResids <- sum(large.resid)
+  propLargeResid <- numberLargeResids/nrow(residuals)
+  rmsr <- sqrt(mean(residuals^2)) #' already in psych::principal()'s output
+  cat("Root means squared residual = ", rmsr, "\n")
+  cat("Number of absolute residuals > 0.05 = ", numberLargeResids, "\n")
+  cat("Proportion of absolute residuals > 0.05 = ", propLargeResid, "\n")
+  hist(residuals)
 }
 
-rFromWilcox(sunday_model, 20)
-rFromWilcox(wedsneday_model, 20)
+residuals <- factor.residuals(cor_matrix, pc2$loadings)
+residual.stats(residuals)
 
-# Writing the results ====
-#' "Depression levels in ecstasy users (Mdn = 17.50) did not differ 
-#' significantly from alcohol users (Mdn = 16.00) the day after the drugs were 
-#' taken, W = 35.5, p = 0.286, r = −.25. However, by Wednesday, ecstasy users 
-#' (Mdn = 33.50) were significantly more depressed than alcohol users 
-#' (Mdn = 7.50), W = 4, p < .001, r = −.78."
+# Rotation 1: varimax (orthogonal) ====
+pc3 <- principal(cor_matrix, nfactors = 4, rotate = "varimax")
+pc3
 
-# Comparing two related conditions with Wilcoxon signed-rank test ====
-df <- read.delim(".\\Data Files\\Drug.dat")
-df$drug %<>% as.factor
+print.psych(pc3, cut = 0.3, sort = TRUE) # printing loadings
 
-# Checking for normality distribution of the difference in scores ====
-df$bdi_change <- df$wedsBDI - df$sundayBDI
+# Rotation 2: direct oblimin (oblique) ====
+pc4 <- principal(cor_matrix, nfactors = 4,
+                 rotate = "oblimin",
+                 oblique.scores = T, scores = TRUE)
+pc4
 
-by(df$bdi_change, df$drug,
-   stat.desc, norm = T, basic = F)
+print.psych(pc4, cut = 0.3, sort = TRUE) # printing loadings
 
-#' Alcohol change doesn't follow a normal distribution
+pc4$Structure # structure matrix, in case anybody's interested
 
-# Creating separate datasets ====
-ecstasy_df <- df %>% filter(drug == 'Ecstasy')
-alcohol_df <- df %>% filter(drug == 'Alcohol')
+# Getting factor scores ====
+#' Apparently, there's some bug in psych() and I can't get the scores.
 
-# Conducting Wilcoxon signed-rank test ====
-alcohol_model <- wilcox.test(alcohol_df$wedsBDI, alcohol_df$sundayBDI,
-                             exact = F, correct = F, paired = T)
-ecstasy_model <- wilcox.test(ecstasy_df$wedsBDI, ecstasy_df$sundayBDI,
-                             exact = F, correct = F, paired = T)
+# Reporting the principal components analysis ====
+#' A principal components analysis (PCA) was conducted on the 23 items with 
+#' orthogonal rotation (varimax). The Kaiser–Meyer–Olkin measure verified the 
+#' sampling adequacy for the analysis KMO = .93 (‘superb’ according to Kaiser, 
+#' 1974), and all KMO values for individual items were > .77, which is well 
+#' above the acceptable limit of .5. Bartlett’s test of sphericity, 
+#' χ² (253) = 19,334, p < .001, indicated that correlations between items were 
+#' sufficiently large for PCA. An initial analysis was run to obtain eigenvalues 
+#' for each component in the data. Four components had eigenvalues over Kaiser’s 
+#' criterion of 1 and in combination explained 50.32% of the variance. The scree 
+#' plot was slightly ambiguous and showed inflexions that would justify 
+#' retaining both two and four components. Given the large sample size, and the 
+#' convergence of the scree plot and Kaiser’s criterion on four components, four 
+#' components were retained in the final analysis. Table 17.1 shows the factor 
+#' loadings after rotation. The items that cluster on the same components 
+#' suggest that component 1 represents a fear of computers, component 2 a fear 
+#' of statistics, component 3 a fear of maths and component 4 peer evaluation 
+#' concerns.
 
-# Calculating effect size ====
-#' `N` is the number of observations, not the number of people
-rFromWilcox(alcohol_model, 20)
-rFromWilcox(ecstasy_model, 20)
+# Computing alpha ====
+#' Alpha shouldn't be computed because of the *tau-equivalence assumption*:
+#' https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2792363/
+#' https://www.researchgate.net/publication/326136417_Reliability_from_alpha_to_omega_a_tutorial
+#' This is a learning exercise, so we'll do it anyways
 
-# Writing results ====
-#' "For ecstasy users, depression levels were significantly higher on Wednesday 
-#' (Mdn = 33.50) than on Sunday (Mdn = 17.50), p = .047, r = −.56. However, for 
-#' alcohol users the opposite was true: depression levels were significantly 
-#' lower on Wednesday (Mdn = 7.50) than on Sunday (Mdn = 16.0), p = .012, 
-#' r = −.45."
+computer_fear <- df[, c(6, 7, 10, 13, 14, 15, 18)]
+statistics_fear <- df[, c(1, 3, 4, 5, 12, 16, 20, 21)]
+math_fear <- df[, c(8, 11, 17)]
+peer_evaluation <- df[, c(2, 9, 19, 22, 23)]
 
-# Comparing several independent groups using the Kruskal-Wallis test ====
-df <- read.delim(".\\Data Files\\Soya.dat")
+alpha(computer_fear)
+alpha(statistics_fear, keys = c(1, -1, 1, 1, 1, 1, 1, 1))
+alpha(math_fear)
+alpha(peer_evaluation)
 
-df$Soya <- factor(df$Soya,
-                  levels = c(1, 2, 3, 4),
-                  labels = c("No Soya",
-                             "1 Soya Meal",
-                             "4 Soya Meals",
-                             "7 Soya Meals"))
+#' The fear of computers, fear of statistics and fear of maths subscales of the 
+#' RAQ all had high reliabilities, all Cronbach’s α = .82. However, the fear of 
+#' negative peer evaluation subscale had relatively low reliability, 
+#' Cronbach’s α = .57
 
-df$Soya <- relevel(df$Soya, "No Soya")
 
-# Checking for normality and homoscedasticity ====
-by(df$Sperm, df$Soya,
-   stat.desc, norm = T, basic = F)
 
-#' With the exception of *No Soya*, all other groups violate normality
 
-leveneTest(df$Sperm, df$Soya, data = df)
 
-#' Homoscedasticity is violated between groups
 
-# Conducting Kruskal-Wallis test ====
-sperm_model <- kruskal.test(Sperm ~ Soya, data = df)
-
-#' There is a significant difference between groups
-#' Let's obtain the mean rank between groups
-#' We could run `df$Ranks <- rank(df$Sperm)` to obtain ranks
-
-by(df$Ranks, df$Soya, mean)
-
-# Visualizing differences through a boxplot ====
-df %>% 
-  
-  # Criando primeira camada
-  ggplot(aes(x = Soya, y = Sperm)) +
-  
-  # Creating boxplot
-  geom_boxplot() +
-  
-  # Mudando nome de todas as partes do gráfico
-  xlab('Soya Condition') +
-  ylab('Sperm Count') +
-  
-  # Alterando limites
-  ylim(c(0,25)) +
-  
-  # Theme
-  theme_minimal()
-
-# Post hoc tests for Kruskal-Wallis ====
-kruskalmc(Sperm ~ Soya, data = df)
-
-#' A significant difference between groups was not attested comparing all groups
-#' against each other.
-#' However, we can focus the comparisons on a baseline group, adding the
-#' parameter `cont = 'two-tailed`. This fixes the first level of the factor
-#' to be compared against the others. This way, we're comparing 1/4/7 Soya Meals
-#' against No Soya Meals. This lowers our expected critical difference,
-#' allowing us to observe differences when those truly occur.
-
-kruskalmc(Sperm ~ Soya, data = df,
-          cont = 'two-tailed')
-
-# Testing for trends with the Jonckheere-Terpstra test ====
-jonckheere.test(df$Sperm, as.numeric(df$Soya))
-
-# Writing results ====
-#' Sperm counts were significantly affected by eating soya meals, H(3) = 8.66, 
-#' p = .034.
-#' 
-#' Sperm counts were significantly affected by eating soya meals, H(3) = 8.66, 
-#' p = .034. Focused comparisons of the mean ranks between groups showed that 
-#' sperm counts were not significantly different when one soya meal 
-#' (difference = 2.2 ) or four soya meals (difference = 2.2) were eaten per 
-#' week compared to none. However, when seven soya meals were eaten per week 
-#' sperm counts were significantly lower than when no soya was eaten 
-#' (difference = 19). In all cases, the critical difference (α = .05 corrected 
-#' for the number of tests) was 15.64. We can conclude that if soya is eaten 
-#' every day it significantly reduces sperm counts compared to eating none; 
-#' however, eating soya less frequently than every day has no significant 
-#' effect on sperm counts (‘phew!’ says the vegetarian man!).
-#' 
-#' Jonckheere’s test revealed a significant trend in the data: as more soya was 
-#' eaten, the median sperm count decreased, J = 912, p = .013.
-
-# Differences between several related groups: Friedman’s ANOVA ====
-df <- read.delim(".\\Data Files\\Diet.dat")
-
-# Checking for normality and descriptive statistics ====
-stat.desc(df, basic = F, norm = T)
-
-# Adjusting dataset ====
-#' Creating *id*
-df$id <- c(rep(1, 3), rep(2, 3), rep(3, 3), rep(4, 3), rep(5, 3), 
-           rep(6, 3), rep(7, 3), rep(8, 3), rep(9, 3), rep(10, 3))
-
-#' Pivoting to longer format
-df %<>%
-  pivot_longer(
-    cols = Start:Month2,
-    names_to = "group",
-    values_to = "weight"
-  )
-
-df$group <- factor(df$group,
-                   levels = c('Start', 'Month1', 'Month2'))
-View(df)
-
-# Conducting Friedman’s ANOVA ====
-friedman.test(weight ~ group | id, data = df)
-
-# Post hoc tests for Friedman’s ANOVA ====
-friedmanmc(df$weight, df$group, df$id)
-
-# Calculating effect sizes ====
-#' We can use `rFromWilcox()` to get specific comparisons' effect sizes
-
-# Writing results ====
-#' "The weight of participants did not significantly change over the two months 
-#' of the diet, χ2(2) = 0.20, p > .05."
-#' 
-#' "The weight of participants did not significantly change over the two months 
-#' of the diet, χ2(2) = 0.20, p > .05. Post hoc tests were used with Bonferroni 
-#' correction applied. It appeared that weight didn’t significantly change from 
-#' the start of the diet to one month, (difference = 1), from the start of the 
-#' diet to two months, (difference = 2), or from one month to two months, 
-#' (difference = 1). In all cases, the critical difference (α = .05 corrected 
-#' for the number of tests) was 10.71. We can conclude that the Andikins diet, 
-#' like its creator, is a complete failure."
 
 
