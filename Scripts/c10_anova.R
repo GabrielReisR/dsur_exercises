@@ -19,7 +19,9 @@ df <- data.frame(dose, libido)
 df %>% 
   
   # Criando primeira camada
-  ggplot(aes(x = dose, y = libido)) +
+  ggplot(aes(x = dose, y = libido, shape = dose)) +
+  
+  geom_point(position = 'jitter') +
   
   # Criando o intervalo de confiança
   stat_summary(fun.data = mean_sdl,
