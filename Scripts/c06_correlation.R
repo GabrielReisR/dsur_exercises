@@ -1,6 +1,5 @@
-setwd("C:\\Users\\Marco2\\Desktop\\Gabriel\\Mestrado\\Data Science\\Estatística\\Data Files")
-getwd()
-examData<-read.delim("Exam Anxiety.dat", header = TRUE)
+
+df <- read.delim(".\\Data Files\\Exam Anxiety.dat", header = TRUE)
 head(examData)
 library(boot);library(ggplot2)
 library(Hmisc)
