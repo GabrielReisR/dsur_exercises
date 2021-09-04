@@ -41,3 +41,7 @@ script files divided by chapter: they can be found
 <a href="https://studysites.sagepub.com/dsur/study/scriptfi.htm" target="_blank">here</a>.
 The ones used here were not copied from these scripts and are in fact *very* 
 different from those.
+
+Below is a plot made for the final chapter of the book. Hope this helps!
+
+![readme_plot](readme_plot.png)
