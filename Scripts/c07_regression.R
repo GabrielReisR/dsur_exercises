@@ -1,33 +1,60 @@
-#Chapter 7 - Regression#
-setwd("C:\\Users\\Gabriel\\Documents\\Mestrado\\Estat?stica\\Data Files")
-getwd()
-library(car)
-library(ggplot2)
-#Simple regression#
-album1<-read.delim("Album Sales 1.dat", header = TRUE)
-head(album1)
-albumSales.1<-lm(sales ~ adverts, data = album1)
-summary(albumSales.1)
+# Chapter 7 - Regression ====
 
-##Multiple regression##
-#Running a multiple regression#
-album2<-read.delim("Album Sales 2.dat", header = TRUE)
-head(album2)
-albumSales.2<-lm(sales ~ adverts, data = album2)
-albumSales.3<-lm(sales ~ adverts + airplay + attract, data = album2)
-summary(albumSales.2)
-summary(albumSales.3)
-#Standardized beta-values (quantos desvios-padr?o em y ocorrer?o com o aumento de 1 desvio-padr?o em B?)#
-library(QuantPsyc)
-lm.beta(albumSales.3)
-#Confidence interval for the parameters#
-confint(albumSales.3)
+# Initializing ====
+load_libraries <- function(){
+  if (!require("boot"))
+    install.packages("boot"); library(boot)
+  if (!require("car"))
+    install.packages("car"); library(car)
+  if (!require("dplyr"))
+    install.packages("dplyr"); library(dplyr)
+  if (!require("ggplot2"))
+    install.packages("ggplot2"); library(ggplot2)
+  if(!require("magrittr"))
+    install.packages("magrittr"); library(magrittr)
+  if(!require("psych"))
+    install.packages("psych"); library(psych)
+  if(!require("QuantPsyc"))
+    install.packages("QuantPsyc"); library(QuantPsyc) # lm.beta()
+}
 
-#Comparing models (o modelo 2 ? realmente melhor que o modelo 1? - apenas hier?rquico)#
-anova(albumSales.1, albumSales.3)
+load_libraries()
 
-##Outliers and influential cases##
-#Criar vari?veis no dataframe e comparar no final#
+# Running a simple linear regression ====
+# Reading data
+df <- read.delim(".\\Data Files\\Album Sales 1.dat")
+
+# Model 1
+model_1 <- lm(sales ~ adverts, data = df)
+summary(model_1)
+
+# Running a multiple regression ====
+# Reading data
+df <- read.delim(".\\Data Files\\Album Sales 2.dat")
+
+# Running simple regression
+model_1 <- lm(sales ~ adverts, data = df)
+
+# Running multiple regression
+model_2 <- lm(sales ~ adverts + airplay + attract, data = df)
+
+# Summarizing models
+summary(model_1)
+summary(model_2)
+
+# Getting standardized beta-values ====
+# That is, when we add a SD to X, how many SDs does Y change?
+
+lm.beta(model_2)
+
+# Getting confidence interval for the parameters ====
+confint(model_2)
+
+# Comparing models ====
+anova(model_1, model_2)
+
+# Checking outliers and influential cases ====
+# Criar vari?veis no dataframe e comparar no final#
 album2$residuals<-resid(albumSales.3)
 album2$standardized.residuals<-rstandard(albumSales.3)
 album2$studentized.residuals<-rstudent(albumSales.3)
